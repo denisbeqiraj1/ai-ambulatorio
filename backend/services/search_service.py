@@ -8,8 +8,13 @@ from .excel_service import append_result
 
 # Initialize OpenAI client
 client = None
+# Initialize OpenAI client
+client = None
 if os.getenv("OPENAI_API_KEY"):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Configuration using simple integer conversion with default fallback
+MAX_DEEP_SEARCH = int(os.getenv("MAX_DEEP_SEARCH", "3"))
 
 def extract_phone_from_text(text: str):
     """
@@ -51,13 +56,13 @@ def search_clinic(query: str):
     """
     Orchestrates the search process:
     1. Try DuckDuckGo (duckduckgo-search lib).
-    2. Deep Search: Visit top 3 links and scrape text.
+    2. Deep Search: Visit top N links and scrape text.
     3. If fails/no phone, try OpenAI.
     4. Save result.
     """
     phone_number = None
     source = "Not Found"
-    
+    print(MAX_DEEP_SEARCH)
     print(f"Searching via DuckDuckGo for: {query}")
     try:
         start_urls = []
@@ -80,9 +85,9 @@ def search_clinic(query: str):
 
         # DEEP SEARCH: Scrape the top URLs
         if start_urls:
-            print(f"Found {len(start_urls)} URLs. Starting Deep Search on top 3...")
+            print(f"Found {len(start_urls)} URLs. Starting Deep Search on top {MAX_DEEP_SEARCH}...")
             
-            for url in start_urls[:3]:
+            for url in start_urls[:MAX_DEEP_SEARCH]:
                 page_text = scrape_url(url)
                 if page_text:
                     # Attempt 1: Regex on page text
