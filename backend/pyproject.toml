@@ -1,0 +1,13 @@
+[project]
+name = "ai-ambulatorio-backend"
+version = "0.1.0"
+description = "Backend for AI Ambulatorio"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "requests",
+    "openai",
+    "pandas",
+    "openpyxl",
+    "python-multipart"
+]

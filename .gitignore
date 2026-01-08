@@ -1,0 +1,31 @@
+# General
+.DS_Store
+Thumbs.db
+.env
+
+# Python (Backend)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+backend/.venv/
+backend/venv/
+*.egg-info/
+
+# Node.js (Frontend)
+node_modules/
+dist/
+build/
+frontend/node_modules/
+frontend/dist/
+
+# Project Data
+data/*.xlsx
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
