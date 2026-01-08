@@ -1,5 +1,6 @@
 import os
-import requests
+import re
+from ddgs import DDGS
 from openai import OpenAI
 from .excel_service import append_result
 
@@ -8,66 +9,83 @@ client = None
 if os.getenv("OPENAI_API_KEY"):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-OPENSERP_URL = os.getenv("OPENSERP_URL", "http://openserp:7000")
+def extract_phone_from_text(text: str):
+    """
+    Simple regex to extract phone numbers from a text block.
+    """
+    phone_pattern = r"(\+?\d{1,3}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{3,4}[\s-]?\d{3,4}"
+    matches = re.findall(phone_pattern, text)
+    if matches:
+        valid_phones = []
+        for match in re.finditer(phone_pattern, text):
+            valid_phones.append(match.group())
+        return valid_phones[0] if valid_phones else None
+    return None
 
 def search_clinic(query: str):
     """
     Orchestrates the search process:
-    1. Try OpenSerp (Karust).
-    2. If fails, try OpenAI (if available).
+    1. Try DuckDuckGo (duckduckgo-search lib).
+    2. If fails/no phone, try OpenAI.
     3. Save result.
     """
     phone_number = None
     source = "Not Found"
     
-    # Solution 1: OpenSerp
-    print(f"Searching via OpenSerp for: {query}")
+    print(f"Searching via DuckDuckGo for: {query}")
     try:
-        # OpenSerp API: /google/search?text=...
-        response = requests.get(f"{OPENSERP_URL}/google/search", params={"text": query})
-        if response.status_code == 200:
-            results = response.json()
+        results_text = ""
+        # Use DDGS context manager
+        with DDGS() as ddgs:
+            # text() returns an iterator of dicts: {'title':..., 'href':..., 'body':...}
+            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=5)
+            if ddgs_gen:
+                results = list(ddgs_gen)
+                if results:
+                    for r in results:
+                        title = r.get('title', '')
+                        body = r.get('body', '')
+                        results_text += f"{title}: {body}\n"
+                else:
+                    print("DuckDuckGo returned no results.")
+            else:
+                print("DuckDuckGo generator empty.")
+
+        if results_text:
+            print(f"DuckDuckGo found content. Length: {len(results_text)}")
             
-            # OpenSerp structure can vary, but usually returns a list of results.
-            # We look for something that resembles a Knowledge Graph or top snippets.
-            # Based on karust/openserp typical output, it might not separate KG clearly as SerpApi,
-            # but let's check for 'knowledge_panel' or similar, or iterate organic results.
+            # Attempt 1: Regex
+            extracted_phone = extract_phone_from_text(results_text)
+            if extracted_phone:
+                phone_number = extracted_phone
+                source = "DuckDuckGo + Regex"
             
-            # Note: The exact JSON structure of karust/openserp depends on the engine.
-            # Assuming it returns a list of "organic" items or a structured object.
-            # Let's try to find a phone number in snippets if specifically extracted fields aren't there.
-            
-            # Simple heuristic: Look for 'phone' key in top-level or iterate results
-            # For now, we'll iterate and check snippets/descriptions.
-            
-            # IMPORTANT: OpenSerp acts as a proxy/scraper. It might return raw-ish data.
-            # Let's inspect the first few results for a phone pattern or explicit field.
-            
-            # If the tool returns "knowledge_panel" we use it.
-            # Example response structure might be a list of results.
-            
-            data = results if isinstance(results, list) else results.get('results', [])
-            
-            # Heuristic phone extraction (very basic)
-            # In a real scenario, we'd use regex on the snippet.
-            # For this MVP, we rely on the possibility that the 'description' or 'title' contains it,
-            # or if OpenSerp provides structured data.
-            
-            # Since I can't run it to see exact output, I will add a fallback request to OpenAI 
-            # to EXTRACT the phone from the OpenSerp CSV/JSON text if simpler methods fail,
-            # OR just default to Solution 2 if explicitly not found.
-            
-            pass 
+            # Attempt 2: OpenAI Extraction
+            if not phone_number and client:
+                print("Extracting phone from DuckDuckGo snippets via OpenAI...")
+                try:
+                    resp = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "Extract the phone number from these search results. If multiple, choose the most relevant. If none, say 'Not Found'."},
+                            {"role": "user", "content": f"Query: {query}\n\nSearch Results:\n{results_text}"}
+                        ]
+                    )
+                    content = resp.choices[0].message.content
+                    if "Not Found" not in content:
+                        phone_number = content.strip()
+                        source = "DuckDuckGo + OpenAI Extraction"
+                except Exception as e:
+                    print(f"OpenAI Extraction Error: {e}")
         else:
-            print(f"OpenSerp failed with status {response.status_code}")
+            print("No text content gathered from DuckDuckGo.")
 
     except Exception as e:
-        print(f"OpenSerp Error: {e}")
+        print(f"DuckDuckGo Error: {e}")
 
     # Solution 2: ChatGPT Fallback
-    # If OpenSerp didn't give a clear "phone" field, or if we couldn't parse it.
     if not phone_number and client:
-        print("OpenSerp failed or yielded no result. Switching to OpenAI.")
+        print("DuckDuckGo failed or yielded no result. Switching to OpenAI.")
         try:
             response = client.chat.completions.create(
                 model="gpt-4o", 
@@ -78,7 +96,7 @@ def search_clinic(query: str):
             )
             content = response.choices[0].message.content
             if "Not Found" not in content:
-                phone_number = content
+                phone_number = content.strip()
                 source = "OpenAI"
         except Exception as e:
             print(f"OpenAI Error: {e}")

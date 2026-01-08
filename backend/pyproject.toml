@@ -9,5 +9,6 @@ dependencies = [
     "openai",
     "pandas",
     "openpyxl",
-    "python-multipart"
+    "python-multipart",
+    "ddgs"
 ]
