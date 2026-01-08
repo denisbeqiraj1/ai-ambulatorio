@@ -10,5 +10,6 @@ dependencies = [
     "pandas",
     "openpyxl",
     "python-multipart",
-    "ddgs"
+    "ddgs",
+    "beautifulsoup4"
 ]

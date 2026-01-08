@@ -1,5 +1,7 @@
 import os
 import re
+import requests
+from bs4 import BeautifulSoup
 from ddgs import DDGS
 from openai import OpenAI
 from .excel_service import append_result
@@ -22,19 +24,44 @@ def extract_phone_from_text(text: str):
         return valid_phones[0] if valid_phones else None
     return None
 
+def scrape_url(url: str):
+    """
+    Fetches the content of a URL and returns the visible text.
+    """
+    try:
+        print(f"Scraping URL: {url}")
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+            
+        text = soup.get_text(separator=' ', strip=True)
+        return text
+    except Exception as e:
+        print(f"Error scraping {url}: {e}")
+        return ""
+
 def search_clinic(query: str):
     """
     Orchestrates the search process:
     1. Try DuckDuckGo (duckduckgo-search lib).
-    2. If fails/no phone, try OpenAI.
-    3. Save result.
+    2. Deep Search: Visit top 3 links and scrape text.
+    3. If fails/no phone, try OpenAI.
+    4. Save result.
     """
     phone_number = None
     source = "Not Found"
     
     print(f"Searching via DuckDuckGo for: {query}")
     try:
-        results_text = ""
+        start_urls = []
+        
         # Use DDGS context manager
         with DDGS() as ddgs:
             # text() returns an iterator of dicts: {'title':..., 'href':..., 'body':...}
@@ -43,49 +70,65 @@ def search_clinic(query: str):
                 results = list(ddgs_gen)
                 if results:
                     for r in results:
-                        title = r.get('title', '')
-                        body = r.get('body', '')
-                        results_text += f"{title}: {body}\n"
+                        href = r.get('href')
+                        if href:
+                            start_urls.append(href)
                 else:
                     print("DuckDuckGo returned no results.")
             else:
                 print("DuckDuckGo generator empty.")
 
-        if results_text:
-            print(f"DuckDuckGo found content. Length: {len(results_text)}")
+        # DEEP SEARCH: Scrape the top URLs
+        if start_urls:
+            print(f"Found {len(start_urls)} URLs. Starting Deep Search on top 3...")
             
-            # Attempt 1: Regex
-            extracted_phone = extract_phone_from_text(results_text)
-            if extracted_phone:
-                phone_number = extracted_phone
-                source = "DuckDuckGo + Regex"
+            for url in start_urls[:3]:
+                page_text = scrape_url(url)
+                if page_text:
+                    # Attempt 1: Regex on page text
+                    extracted_phone = extract_phone_from_text(page_text[:10000]) # Limit text size
+                    if extracted_phone:
+                        phone_number = extracted_phone
+                        source = f"Deep Search ({url}) + Regex"
+                        print(f"Phone found on {url}: {phone_number}")
+                        break # Stop if found
+                    
+                    # Attempt 2: OpenAI Extraction on page snippets
+                    # Only do this if regex failed, to save tokens, or if we want high accuracy
+                    # For now, let's stick to regex for speed, or maybe use OpenAI if regex fails?
+                    # Let's try OpenAI only if we are desperate or valid pattern check is weak.
+                    # Given the user wants "parse the research", regex is a good first step.
+                    
+                    # If regex failed, let's give OpenAI a shot at the page content (truncated)
+                    # This increases cost/time but fulfills "Deep Search"
+                    if client and not phone_number:
+                        print(f"Regex failed on {url}, asking OpenAI...")
+                        try:
+                            resp = client.chat.completions.create(
+                                model="gpt-4o",
+                                messages=[
+                                    {"role": "system", "content": "Extract the public phone number for the medical clinic/doctor from the text below. If none, say 'Not Found'."},
+                                    {"role": "user", "content": f"Page Text:\n{page_text[:3000]}"}
+                                ]
+                            )
+                            content = resp.choices[0].message.content
+                            if "Not Found" not in content:
+                                phone_number = content.strip()
+                                source = f"Deep Search ({url}) + OpenAI"
+                                print(f"OpenAI found phone on {url}: {phone_number}")
+                                break
+                        except Exception as e:
+                            print(f"OpenAI Error on {url}: {e}")
             
-            # Attempt 2: OpenAI Extraction
-            if not phone_number and client:
-                print("Extracting phone from DuckDuckGo snippets via OpenAI...")
-                try:
-                    resp = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {"role": "system", "content": "Extract the phone number from these search results. If multiple, choose the most relevant. If none, say 'Not Found'."},
-                            {"role": "user", "content": f"Query: {query}\n\nSearch Results:\n{results_text}"}
-                        ]
-                    )
-                    content = resp.choices[0].message.content
-                    if "Not Found" not in content:
-                        phone_number = content.strip()
-                        source = "DuckDuckGo + OpenAI Extraction"
-                except Exception as e:
-                    print(f"OpenAI Extraction Error: {e}")
         else:
-            print("No text content gathered from DuckDuckGo.")
+            print("No URLs found to scrape.")
 
     except Exception as e:
         print(f"DuckDuckGo Error: {e}")
 
     # Solution 2: ChatGPT Fallback
     if not phone_number and client:
-        print("DuckDuckGo failed or yielded no result. Switching to OpenAI.")
+        print("Deep Search failed. Switching to OpenAI direct knowledge.")
         try:
             response = client.chat.completions.create(
                 model="gpt-4o", 
