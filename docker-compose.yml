@@ -8,7 +8,8 @@ services:
       - ./data:/data
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - MAX_DEEP_SEARCH=${MAX_DEEP_SEARCH:-3}
+      - MAX_DEEP_SEARCH=${MAX_DEEP_SEARCH}
+      - ENGINE=${ENGINE}
       - DATA_DIR=/data
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
