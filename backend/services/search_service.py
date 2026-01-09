@@ -190,32 +190,17 @@ def search_clinic(query: str):
     else:
         print("No URLs found to scrape.")
 
-    # Solution 2: ChatGPT Fallback
-    if not phone_number and client:
-        print("Deep Search failed. Switching to OpenAI direct knowledge.")
-        try:
-            response = client.chat.completions.create(
-                model="gpt-4o", 
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant that finds public phone numbers for medical clinics. If you don't know it, say 'Not Found'."},
-                    {"role": "user", "content": f"Find the phone number for: {query}"}
-                ]
-            )
-            content = response.choices[0].message.content
-            if "Not Found" not in content:
-                phone_number = content.strip()
-                source = "OpenAI"
-                found_details.append({
-                    "url": "OpenAI Direct Knowledge",
-                    "phone": phone_number,
-                    "method": "LLM Fallback"
-                })
-        except Exception as e:
-            print(f"OpenAI Error: {e}")
-
     # Save logic
     final_phone = phone_number if phone_number else "Not Found"
-    append_result(query, final_phone, source)
+    # Find the first URL where the consensus phone was found
+    top_url = "Not Found"
+    for detail in found_details:
+        if detail['phone'] == final_phone:
+            top_url = detail['url']
+            break
+
+    # Append result to Google Sheet using the URL of the most common phone
+    append_result(query, final_phone, top_url)
     
     return {
         "query": query,
