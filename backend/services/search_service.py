@@ -70,7 +70,7 @@ def search_clinic(query: str):
         # Use DDGS context manager
         with DDGS() as ddgs:
             # text() returns an iterator of dicts: {'title':..., 'href':..., 'body':...}
-            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=5)
+            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=5,backend='duckduckgo')
             if ddgs_gen:
                 results = list(ddgs_gen)
                 if results:
