@@ -5,7 +5,7 @@ function App() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const production = true;
+  const production = false;
   const productionUrl = '13.50.100.103';
   const [showDetails, setShowDetails] = useState(false)
 
