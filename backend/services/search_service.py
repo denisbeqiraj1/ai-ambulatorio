@@ -184,7 +184,7 @@ def search_clinic(query: str):
             most_common = Counter(all_phones).most_common(1)
             phone_number = most_common[0][0]
             count = most_common[0][1]
-            source = f"Deep Search Consensus ({count}/{len(found_details)} concur)"
+            source = f"Deep Search ({count}/{len(found_details)} ricerche simili)"
             print(f"Consensus Phone: {phone_number} ({count} occurrences)")
         
     else:
