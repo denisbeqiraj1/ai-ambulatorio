@@ -5,7 +5,8 @@ function App() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-
+  const production = true;
+  const productionUrl = '13.50.100.103';
   const [showDetails, setShowDetails] = useState(false)
 
   const handleSearch = async (e) => {
@@ -18,7 +19,7 @@ function App() {
     setShowDetails(false)
 
     try {
-      const response = await fetch(`http://localhost:8000/search?query=${encodeURIComponent(query)}`)
+      const response = await fetch(`http://${production ? productionUrl : 'localhost'}:8000/search?query=${encodeURIComponent(query)}`)
       if (!response.ok) {
         throw new Error('Network response was not ok')
       }
