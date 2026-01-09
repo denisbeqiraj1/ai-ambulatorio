@@ -10,9 +10,10 @@ from .excel_service import append_result
 # Initialize OpenAI client
 client = None
 # Initialize OpenAI client
-client = None
+engine_type = os.getenv("ENGINE")
 if os.getenv("OPENAI_API_KEY"):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
 
 # Configuration using simple integer conversion with default fallback
 MAX_DEEP_SEARCH = int(os.getenv("MAX_DEEP_SEARCH", "3"))
