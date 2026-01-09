@@ -2,6 +2,7 @@ import os
 import re
 import requests
 from bs4 import BeautifulSoup
+from collections import Counter
 from ddgs import DDGS
 from openai import OpenAI
 from .excel_service import append_result
@@ -15,6 +16,32 @@ if os.getenv("OPENAI_API_KEY"):
 
 # Configuration using simple integer conversion with default fallback
 MAX_DEEP_SEARCH = int(os.getenv("MAX_DEEP_SEARCH", "3"))
+
+def validate_topic(query: str) -> bool:
+    """
+    Validates if the query is related to medical clinics, doctors, or healthcare.
+    Returns True if relevant, False otherwise.
+    """
+    if not client:
+        print("OpenAI client not initialized, skipping validation.")
+        return True
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a content filter. Check if the user query is related to medical clinics, doctors, hospitals, healthcare, or finding medical contacts in Italy. Reply ONLY with 'YES' if it is relevant, or 'NO' if it is off-topic (e.g. pizza, gaming, entertainment)."},
+                {"role": "user", "content": f"Query: {query}"}
+            ],
+            temperature=0
+        )
+        answer = response.choices[0].message.content.strip().upper()
+        print(f"Topic Validation for '{query}': {answer}")
+        return "YES" in answer
+    except Exception as e:
+        print(f"Validation Error: {e}")
+        # Fail open if validation errors out to avoid blocking legitimate requests during outages
+        return True
 
 def extract_phone_from_text(text: str):
     """
@@ -52,25 +79,18 @@ def scrape_url(url: str):
         print(f"Error scraping {url}: {e}")
         return ""
 
-def search_clinic(query: str):
+def fetch_search_urls(query: str, max_results: int, engine: str = "duckduckgo") -> list[str]:
     """
-    Orchestrates the search process:
-    1. Try DuckDuckGo (duckduckgo-search lib).
-    2. Deep Search: Visit top N links and scrape text.
-    3. If fails/no phone, try OpenAI.
-    4. Save result.
+    Fetches search result URLs from a specified search engine.
     """
-    phone_number = None
-    source = "Not Found"
-    print(MAX_DEEP_SEARCH)
-    print(f"Searching via DuckDuckGo for: {query}")
+    start_urls = []
+    print(f"Searching via {engine} for: {query}")
+    
     try:
-        start_urls = []
-        
         # Use DDGS context manager
         with DDGS() as ddgs:
             # text() returns an iterator of dicts: {'title':..., 'href':..., 'body':...}
-            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=5,backend='duckduckgo')
+            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=max_results, backend='duckduckgo')
             if ddgs_gen:
                 results = list(ddgs_gen)
                 if results:
@@ -82,54 +102,93 @@ def search_clinic(query: str):
                     print("DuckDuckGo returned no results.")
             else:
                 print("DuckDuckGo generator empty.")
-
-        # DEEP SEARCH: Scrape the top URLs
-        if start_urls:
-            print(f"Found {len(start_urls)} URLs. Starting Deep Search on top {MAX_DEEP_SEARCH}...")
-            
-            for url in start_urls[:MAX_DEEP_SEARCH]:
-                page_text = scrape_url(url)
-                if page_text:
-                    # Attempt 1: Regex on page text
-                    extracted_phone = extract_phone_from_text(page_text[:10000]) # Limit text size
-                    if extracted_phone:
-                        phone_number = extracted_phone
-                        source = f"Deep Search ({url}) + Regex"
-                        print(f"Phone found on {url}: {phone_number}")
-                        break # Stop if found
-                    
-                    # Attempt 2: OpenAI Extraction on page snippets
-                    # Only do this if regex failed, to save tokens, or if we want high accuracy
-                    # For now, let's stick to regex for speed, or maybe use OpenAI if regex fails?
-                    # Let's try OpenAI only if we are desperate or valid pattern check is weak.
-                    # Given the user wants "parse the research", regex is a good first step.
-                    
-                    # If regex failed, let's give OpenAI a shot at the page content (truncated)
-                    # This increases cost/time but fulfills "Deep Search"
-                    if client and not phone_number:
-                        print(f"Regex failed on {url}, asking OpenAI...")
-                        try:
-                            resp = client.chat.completions.create(
-                                model="gpt-4o",
-                                messages=[
-                                    {"role": "system", "content": "Extract the public phone number for the medical clinic/doctor from the text below. If none, say 'Not Found'."},
-                                    {"role": "user", "content": f"Page Text:\n{page_text[:3000]}"}
-                                ]
-                            )
-                            content = resp.choices[0].message.content
-                            if "Not Found" not in content:
-                                phone_number = content.strip()
-                                source = f"Deep Search ({url}) + OpenAI"
-                                print(f"OpenAI found phone on {url}: {phone_number}")
-                                break
-                        except Exception as e:
-                            print(f"OpenAI Error on {url}: {e}")
-            
-        else:
-            print("No URLs found to scrape.")
-
     except Exception as e:
         print(f"DuckDuckGo Error: {e}")
+            
+    return start_urls
+
+def search_clinic(query: str):
+    """
+    Orchestrates the search process:
+    1. Validation: Check if query is in-topic (ambulatori/medical).
+    2. Try DuckDuckGo (duckduckgo-search lib).
+    3. Deep Search: Visit top N links and scrape text.
+    4. Consensus: Check found phone numbers and pick the most frequent.
+    5. If fails/no phone, try OpenAI.
+    6. Save result.
+    """
+    
+    # 1. Input Validation
+    if not validate_topic(query):
+        print(f"Query '{query}' rejected as off-topic.")
+        return {
+            "query": query,
+            "phone_number": "Off-Topic",
+            "source": "Input Validation"
+        }
+
+    phone_number = None
+    source = "Not Found"
+    found_details = [] # List of {url, phone, method}
+    
+    # 2. Results via Search Engine
+    start_urls = fetch_search_urls(query, MAX_DEEP_SEARCH, engine="duckduckgo")
+
+    # DEEP SEARCH: Scrape the top URLs
+    if start_urls:
+        print(f"Found {len(start_urls)} URLs. Starting Deep Search on top {MAX_DEEP_SEARCH}...")
+        
+        for url in start_urls[:MAX_DEEP_SEARCH]:
+            page_text = scrape_url(url)
+            if page_text:
+                # Attempt 1: Regex on page text
+                extracted_phone = extract_phone_from_text(page_text[:10000]) # Limit text size
+                if extracted_phone:
+                    print(f"Phone found on {url} (Regex): {extracted_phone}")
+                    found_details.append({
+                        "url": url,
+                        "phone": extracted_phone,
+                        "method": "Regex"
+                    })
+                    # Continue to build consensus
+                
+                # Attempt 2: OpenAI Extraction on page snippets
+                # Only if regex failed for this URL
+                elif client:
+                    print(f"Regex failed on {url}, asking OpenAI...")
+                    try:
+                        resp = client.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[
+                                {"role": "system", "content": "Extract the public phone number for the medical clinic/doctor from the text below. If none, say 'Not Found'."},
+                                {"role": "user", "content": f"Page Text:\n{page_text[:3000]}"}
+                            ]
+                        )
+                        content = resp.choices[0].message.content
+                        if "Not Found" not in content:
+                            p_num = content.strip()
+                            print(f"OpenAI found phone on {url}: {p_num}")
+                            found_details.append({
+                                "url": url,
+                                "phone": p_num,
+                                "method": "OpenAI"
+                            })
+                    except Exception as e:
+                        print(f"OpenAI Error on {url}: {e}")
+        
+        # CONSENSUS LOGIC
+        if found_details:
+            # Extract just phone numbers for frequency count
+            all_phones = [d['phone'] for d in found_details]
+            print(f"Collected phones: {all_phones}")
+            most_common = Counter(all_phones).most_common(1)
+            phone_number = most_common[0][0]
+            count = most_common[0][1]
+            source = f"Deep Search Consensus ({count}/{len(found_details)} concur)"
+            print(f"Consensus Phone: {phone_number} ({count} occurrences)")
+        
+    else:
+        print("No URLs found to scrape.")
 
     # Solution 2: ChatGPT Fallback
     if not phone_number and client:
@@ -146,6 +205,11 @@ def search_clinic(query: str):
             if "Not Found" not in content:
                 phone_number = content.strip()
                 source = "OpenAI"
+                found_details.append({
+                    "url": "OpenAI Direct Knowledge",
+                    "phone": phone_number,
+                    "method": "LLM Fallback"
+                })
         except Exception as e:
             print(f"OpenAI Error: {e}")
 
@@ -156,5 +220,6 @@ def search_clinic(query: str):
     return {
         "query": query,
         "phone_number": final_phone,
-        "source": source
+        "source": source,
+        "details": found_details
     }

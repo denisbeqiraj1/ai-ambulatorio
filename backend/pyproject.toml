@@ -11,5 +11,6 @@ dependencies = [
     "openpyxl",
     "python-multipart",
     "ddgs",
-    "beautifulsoup4"
+    "beautifulsoup4",
+    "gspread"
 ]

@@ -6,6 +6,8 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const [showDetails, setShowDetails] = useState(false)
+
   const handleSearch = async (e) => {
     e.preventDefault()
     if (!query) return
@@ -13,6 +15,7 @@ function App() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setShowDetails(false)
 
     try {
       const response = await fetch(`http://localhost:8000/search?query=${encodeURIComponent(query)}`)
@@ -37,6 +40,7 @@ function App() {
             <div className="uppercase tracking-wide text-sm text-indigo-500 font-semibold mb-1">Ricerca Automatica</div>
             <h1 className="block mt-1 text-2xl leading-tight font-medium text-black">Trova Numero Ambulatorio</h1>
             <p className="mt-2 text-gray-500">Inserisci il nome dell'ambulatorio per trovare il numero di telefono.</p>
+            <p className="text-xs text-indigo-400 mt-1">Nota: La ricerca è limitata al contesto medico/ambulatoriale.</p>
 
             <form onSubmit={handleSearch} className="mt-6 flex gap-2">
               <input
@@ -60,13 +64,57 @@ function App() {
               {error && <div className="text-red-500 text-center">{error}</div>}
 
               {result && (
-                <div className="bg-gray-100 p-4 rounded-lg border border-gray-200">
+                <div className={`p-4 rounded-lg border ${result.phone_number === 'Off-Topic' ? 'bg-red-50 border-red-200' : 'bg-gray-100 border-gray-200'}`}>
                   <h3 className="text-lg font-semibold text-gray-800">Risultato:</h3>
-                  <div className="mt-2 text-gray-700">
-                    <p><span className="font-bold">Ambulatorio:</span> {result.query}</p>
-                    <p><span className="font-bold">Telefono:</span> {result.phone_number}</p>
-                    <p><span className="font-bold">Fonte:</span> <span className={`inline-block px-2 py-0.5 rounded text-xs ${result.source === 'OpenAI' ? 'bg-green-200 text-green-800' : 'bg-blue-200 text-blue-800'}`}>{result.source}</span></p>
-                  </div>
+                  {result.phone_number === 'Off-Topic' ? (
+                    <div className="mt-2 text-red-700">
+                      <p className="font-bold">Richiesta non valida.</p>
+                      <p className="text-sm mt-1">Per favora inserisci una ricerca relativa ad ambulatori, medici o strutture sanitarie.</p>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-gray-700 space-y-2">
+                      <div><span className="font-bold">Ambulatorio:</span> {result.query}</div>
+                      <div><span className="font-bold">Telefono:</span> {result.phone_number}</div>
+
+                      {/* Main Source / Consensus Info */}
+                      <div>
+                        <span className="font-bold">Fonte Principale:</span>
+                        <span className={`ml-2 inline-block px-2 py-0.5 rounded text-xs ${result.source.includes('OpenAI') ? 'bg-green-200 text-green-800' : 'bg-blue-200 text-blue-800'}`}>
+                          {result.source}
+                        </span>
+                      </div>
+
+                      {/* Dropdown for Details */}
+                      {result.details && result.details.length > 0 && (
+                        <div className="mt-4 pt-2 border-t border-gray-200">
+                          <button
+                            onClick={() => setShowDetails(!showDetails)}
+                            className="text-sm text-indigo-600 hover:text-indigo-800 focus:outline-none flex items-center"
+                          >
+                            {showDetails ? 'Nascondi dettagli' : 'Mostra altre fonti'}
+                            <svg className={`w-4 h-4 ml-1 transform transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+
+                          {showDetails && (
+                            <div className="mt-2 space-y-2">
+                              {result.details.map((item, index) => (
+                                <div key={index} className="text-xs bg-white p-2 rounded border border-gray-200">
+                                  <div className="font-semibold text-gray-600 truncate">{item.url}</div>
+                                  <div className={`mt-1 ${item.phone === result.phone_number ? 'text-green-600 font-bold' : 'text-gray-500'}`}>
+                                    {item.phone}
+                                    <span className="text-gray-400 font-normal ml-1">({item.method})</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {result.phone_number === 'Not Found' && (
                     <p className="mt-4 text-sm text-yellow-600 bg-yellow-50 p-2 rounded">
                       Non siamo riusciti a trovare il numero. Abbiamo provato con Google e AI.
