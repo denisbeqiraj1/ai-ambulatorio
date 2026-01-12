@@ -18,9 +18,9 @@ def read_root():
     return {"Hello": "World"}
 
 @app.get("/search")
-def search(query: str):
+def search(query: str, engine: str | None = None):
     """
     Search for a clinic by name.
     """
-    result = search_clinic(query)
+    result = search_clinic(query, engine=engine)
     return result

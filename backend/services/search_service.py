@@ -45,7 +45,8 @@ def validate_topic(query: str) -> bool:
 # ==========================
 # Main Search Function
 # ==========================
-def search_clinic(query: str):
+def search_clinic(query: str, engine: str | None = None):
+    engine = (engine or ENGINE).lower()
     if not validate_topic(query):
         return {
             "query": query,
@@ -56,7 +57,13 @@ def search_clinic(query: str):
     # ======================
     # DEEPSEARCH MODE
     # ======================
-    if ENGINE == "deepsearch":
+    if engine == "deepsearch":
+        if not client:
+            return {
+                "query": query,
+                "phone_number": "Not Found",
+                "source": "OpenAI WebSearch (missing API key)",
+            }
         result = deepsearch_web_structured(client,query)
 
         append_result(
