@@ -33,7 +33,7 @@ function App() {
   const [engine, setEngine] = useState('local')
   const [showDetails, setShowDetails] = useState(false)
 
-  const production = false;
+  const production = true;
   const productionUrl = '13.50.100.103';
 
   const handleSearch = async (e) => {
