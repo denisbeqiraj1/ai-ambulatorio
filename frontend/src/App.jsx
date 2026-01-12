@@ -87,7 +87,8 @@ function App() {
             </div>
             <input
               type="text"
-              className="block w-full pl-11 pr-32 py-4 bg-slate-50 border border-slate-200 rounded-2xl leading-5 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
+              // UPDATED: Changed pr-32 to pr-20 md:pr-32 to give text more room on mobile
+              className="block w-full pl-11 pr-20 md:pr-32 py-4 bg-slate-50 border border-slate-200 rounded-2xl leading-5 text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-sm"
               placeholder="Es. Cardiologia San Raffaele Milano..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -95,7 +96,8 @@ function App() {
             <button
               type="submit"
               disabled={loading || !query}
-              className="absolute right-2 top-2 bottom-2 px-6 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              // UPDATED: Changed px-6 to px-3 md:px-6 to make button shorter on mobile
+              className="absolute right-2 top-2 bottom-2 px-3 md:px-6 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 transition-all shadow-md hover:shadow-lg focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
