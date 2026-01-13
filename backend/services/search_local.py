@@ -1,25 +1,44 @@
+import os
 import re
-import requests
 from collections import Counter
+
+import requests
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+
 from .excel_service import append_result
-import os
 
 MAX_DEEP_SEARCH = int(os.getenv("MAX_DEEP_SEARCH", "3"))
 
-def extract_phone_from_text(text: str):
-    """
-    Simple regex to extract phone numbers from a text block.
-    """
-    phone_pattern = r"(\+?\d{1,3}[\s-]?)?(\(?\d{1,4}\)?[\s-]?)?\d{3,4}[\s-]?\d{3,4}"
-    matches = re.findall(phone_pattern, text)
-    if matches:
-        valid_phones = []
-        for match in re.finditer(phone_pattern, text):
-            valid_phones.append(match.group())
-        return valid_phones[0] if valid_phones else None
-    return None
+ITALIAN_PHONE_REGEX = re.compile(
+    r"""
+    (?<!\d)                # No digit before
+    (?:\+39\s*)?           # Optional +39
+    (0\d{1,3}|3\d{2})      # Landline (0xxx) or mobile (3xx)
+    (?:[\s\-]?\d){7,8}     # Remaining digits (total must be 10)
+    (?!\d)                 # No digit after
+    """,
+    re.VERBOSE,
+)
+
+
+def extract_phone_from_text(text: str) -> str | None:
+    matches = []
+
+    for m in ITALIAN_PHONE_REGEX.finditer(text):
+        raw = m.group()
+
+        # Normalize: remove spaces, dashes, +39
+        digits = re.sub(r"\D", "", raw)
+        if digits.startswith("39"):
+            digits = digits[2:]
+
+        # STRICT validation
+        if len(digits) == 10:
+            matches.append(digits)
+
+    return matches[0] if matches else None
+
 
 def scrape_url(url: str):
     """
@@ -32,35 +51,44 @@ def scrape_url(url: str):
         }
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
+        soup = BeautifulSoup(response.text, "html.parser")
+
         # Remove script and style elements
         for script in soup(["script", "style"]):
             script.decompose()
-            
-        text = soup.get_text(separator=' ', strip=True)
+
+        text = soup.get_text(separator=" ", strip=True)
         return text
     except Exception as e:
         print(f"Error scraping {url}: {e}")
         return ""
 
-def fetch_search_urls(query: str, max_results: int, engine: str = "duckduckgo") -> list[str]:
+
+def fetch_search_urls(
+    query: str, max_results: int, engine: str = "duckduckgo"
+) -> list[str]:
     """
     Fetches search result URLs from a specified search engine.
     """
     start_urls = []
     print(f"Searching via {engine} for: {query}")
-    
+
     try:
         # Use DDGS context manager
         with DDGS() as ddgs:
             # text() returns an iterator of dicts: {'title':..., 'href':..., 'body':...}
-            ddgs_gen = ddgs.text(query, region='it-it', safesearch='off', max_results=max_results, backend='duckduckgo')
+            ddgs_gen = ddgs.text(
+                query,
+                region="it-it",
+                safesearch="off",
+                max_results=max_results,
+                backend="duckduckgo",
+            )
             if ddgs_gen:
                 results = list(ddgs_gen)
                 if results:
                     for r in results:
-                        href = r.get('href')
+                        href = r.get("href")
                         if href:
                             start_urls.append(href)
                 else:
@@ -69,7 +97,7 @@ def fetch_search_urls(query: str, max_results: int, engine: str = "duckduckgo") 
                 print("DuckDuckGo generator empty.")
     except Exception as e:
         print(f"DuckDuckGo Error: {e}")
-            
+
     return start_urls
 
 
@@ -86,39 +114,41 @@ def search_clinic_local(query: str):
 
     phone_number = None
     source = "Not Found"
-    found_details = [] # List of {url, phone, method}
-    
+    found_details = []  # List of {url, phone, method}
+
     # 2. Results via Search Engine
     start_urls = fetch_search_urls(query, MAX_DEEP_SEARCH, engine="duckduckgo")
 
     # DEEP SEARCH: Scrape the top URLs
     if start_urls:
-        print(f"Found {len(start_urls)} URLs. Starting Deep Search on top {MAX_DEEP_SEARCH}...")
-        
+        print(
+            f"Found {len(start_urls)} URLs. Starting Deep Search on top {MAX_DEEP_SEARCH}..."
+        )
+
         for url in start_urls[:MAX_DEEP_SEARCH]:
             page_text = scrape_url(url)
             if page_text:
                 # Attempt 1: Regex on page text
-                extracted_phone = extract_phone_from_text(page_text[:10000]) # Limit text size
+                extracted_phone = extract_phone_from_text(
+                    page_text[:10000]
+                )  # Limit text size
                 if extracted_phone:
                     print(f"Phone found on {url} (Regex): {extracted_phone}")
-                    found_details.append({
-                        "url": url,
-                        "phone": extracted_phone,
-                        "method": "Regex"
-                    })
-        
+                    found_details.append(
+                        {"url": url, "phone": extracted_phone, "method": "Regex"}
+                    )
+
         # CONSENSUS LOGIC
         if found_details:
             # Extract just phone numbers for frequency count
-            all_phones = [d['phone'] for d in found_details]
+            all_phones = [d["phone"] for d in found_details]
             print(f"Collected phones: {all_phones}")
             most_common = Counter(all_phones).most_common(1)
             phone_number = most_common[0][0]
             count = most_common[0][1]
             source = f"Deep Search ({count}/{len(found_details)} ricerche simili)"
             print(f"Consensus Phone: {phone_number} ({count} occurrences)")
-        
+
     else:
         print("No URLs found to scrape.")
 
@@ -127,16 +157,16 @@ def search_clinic_local(query: str):
     # Find the first URL where the consensus phone was found
     top_url = "Not Found"
     for detail in found_details:
-        if detail['phone'] == final_phone:
-            top_url = detail['url']
+        if detail["phone"] == final_phone:
+            top_url = detail["url"]
             break
 
     # Append result to Google Sheet using the URL of the most common phone
     append_result(query, final_phone, top_url)
-    
+
     return {
         "query": query,
         "phone_number": final_phone,
         "source": source,
-        "details": found_details
+        "details": found_details,
     }

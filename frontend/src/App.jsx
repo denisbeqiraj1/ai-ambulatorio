@@ -202,8 +202,14 @@ function App() {
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${showDetails ? 'rotate-180' : ''}`} />
                         </button>
 
-                        <div className={`overflow-hidden transition-all duration-300 ease-in-out ${showDetails ? 'max-h-96 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
-                          <div className="space-y-2 pl-1 pr-1 pb-1">
+                            <div
+                              className={`transition-all duration-300 ease-in-out ${
+                                showDetails
+                                  ? 'max-h-96 opacity-100 mt-2 overflow-y-auto'
+                                  : 'max-h-0 opacity-0 overflow-hidden'
+                              }`}
+                            >                          
+                            <div className="space-y-2 pl-1 pr-1 pb-1">
                             {result.details.map((item, index) => (
                               <div key={index} className="p-3 bg-white border border-slate-200 rounded-lg text-xs shadow-sm">
                                 <div className="font-medium text-slate-700 truncate mb-1">{item.url}</div>
