@@ -12,5 +12,8 @@ dependencies = [
     "python-multipart",
     "ddgs",
     "beautifulsoup4",
-    "gspread"
+    "gspread",
+    "slowapi",
+    "python-jose[cryptography]",
+    "passlib[bcrypt]"
 ]

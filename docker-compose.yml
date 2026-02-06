@@ -10,6 +10,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - MAX_DEEP_SEARCH=${MAX_DEEP_SEARCH}
       - ENGINE=${ENGINE}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
       - DATA_DIR=/data
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
