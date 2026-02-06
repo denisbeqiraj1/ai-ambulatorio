@@ -42,7 +42,7 @@ function Search() {
     const navigate = useNavigate();
 
     const production = true;
-    const productionUrl = '16.16.170.224';
+    const productionUrl = '13.48.117.229';
 
     const handleLogout = () => {
         localStorage.removeItem('token');

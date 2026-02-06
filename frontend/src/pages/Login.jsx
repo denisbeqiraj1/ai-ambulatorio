@@ -8,7 +8,7 @@ const Login = () => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
     const production = true;
-    const productionUrl = '16.16.170.224';
+    const productionUrl = '13.48.117.229';
     const baseUrl = `http://${production ? productionUrl : 'localhost'}:8000`;
 
     // Basic frontend sanitization
