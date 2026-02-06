@@ -7,7 +7,7 @@ const Login = () => {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
-    const production = false;
+    const production = true;
     const productionUrl = '13.50.100.103';
     const baseUrl = `http://${production ? productionUrl : 'localhost'}:8000`;
 
