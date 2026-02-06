@@ -38,7 +38,6 @@ def append_to_google_sheet(site_name: str, phone: str,source: str):
         # Columns: [Site Name, Phone Number, Source]
         row = [site_name, phone, source]
         sheet.append_row(row)
-        print(f"Successfully saved to Google Sheet: {row}")
     except Exception as e:
         print(f"Error saving to Google Sheet: {e}")
 
@@ -47,5 +46,4 @@ def append_result(search_query: str, phone_number: str, source: str):
     Appends the search result to the Excel file AND Google Sheets.
     Creates the file if it doesn't exist.
     """
-    print(f"Saving result: {search_query} -> {phone_number} ({source})")
     append_to_google_sheet(search_query, phone_number, source)
