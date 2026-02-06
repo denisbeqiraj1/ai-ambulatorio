@@ -42,7 +42,7 @@ function Search() {
     const navigate = useNavigate();
 
     const production = true;
-    const productionUrl = '13.50.100.103';
+    const productionUrl = '16.16.170.224';
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -161,8 +161,8 @@ function Search() {
                             <button
                                 onClick={() => setEngine('local')}
                                 className={`relative z-10 px-6 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${engine === 'local'
-                                        ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-black/5'
-                                        : 'text-slate-500 hover:text-slate-700'
+                                    ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-black/5'
+                                    : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 Ricerca Locale
@@ -170,8 +170,8 @@ function Search() {
                             <button
                                 onClick={() => setEngine('deepsearch')}
                                 className={`relative z-10 px-6 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${engine === 'deepsearch'
-                                        ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-black/5'
-                                        : 'text-slate-500 hover:text-slate-700'
+                                    ? 'bg-white text-indigo-600 shadow-sm ring-1 ring-black/5'
+                                    : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 AI DeepSearch
@@ -246,8 +246,8 @@ function Search() {
 
                                                 <div
                                                     className={`transition-all duration-300 ease-in-out ${showDetails
-                                                            ? 'max-h-96 opacity-100 mt-2 overflow-y-auto'
-                                                            : 'max-h-0 opacity-0 overflow-hidden'
+                                                        ? 'max-h-96 opacity-100 mt-2 overflow-y-auto'
+                                                        : 'max-h-0 opacity-0 overflow-hidden'
                                                         }`}
                                                 >
                                                     <div className="space-y-2 pl-1 pr-1 pb-1">
